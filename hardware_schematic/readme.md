@@ -1,7 +1,7 @@
-PROJECT: Schematic Diagram of ADF7030-1
+PROJECT: ADF7030-1
 
--Cadence Allegro file 
+-Schematic Diagram PDF  
 
--ADF7030-1 Data sheet
+-ADF7030-1 Datasheet
 
 *Our first task as an intern in ADI
