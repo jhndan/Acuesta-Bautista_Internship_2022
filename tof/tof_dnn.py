@@ -36,6 +36,7 @@ import numpy as np
 import cv2 as cv
 import argparse
 from enum import Enum
+from time import perf_counter
 # import sys
 
 inWidth = 300
@@ -139,6 +140,15 @@ if __name__ == "__main__":
     distance_scale_ir = 255.0 / max_value_of_IR_pixel
     distance_scale = 255.0 / camera_range
 
+    prev_frame_time = 0
+    new_frame_time = 0
+
+    pre_fps = 0
+    smoothing = 0.9
+    
+    before_get_data = 0
+    after_get_data = 0
+    save = []
     while True:
         # Capture frame-by-frame
         status = cameras[0].requestFrame(frame)
@@ -147,6 +157,9 @@ if __name__ == "__main__":
 
         depth_map = np.array(frame.getData("depth"), dtype="uint16", copy=False)
         ir_map = np.array(frame.getData("ir"), dtype="uint16", copy=False)
+
+        get_data = frame.getData("depth")
+        after_get_data = perf_counter()
 
         # Creation of the IR image
         ir_map = ir_map[0: int(ir_map.shape[0] / 2), :]
@@ -166,6 +179,17 @@ if __name__ == "__main__":
 
         # Combine depth and IR for more accurate results
         result = cv.addWeighted(ir_map, 0.4, depth_map, 0.6, 0)
+
+        new_frame_time=perf_counter()
+
+        acutal = 1 / (new_frame_time-prev_frame_time)
+        prev_frame_time = new_frame_time
+
+        fps = (pre_fps * smoothing) + (acutal * (1-smoothing))
+        pre_fps = fps
+
+        fps_view = f"{int(fps)} fps"
+        save.append(fps)
 
         # Start the computations for object detection using DNN
         blob = cv.dnn.blobFromImage(result, inScaleFactor, (inWidth, inHeight), (meanVal, meanVal, meanVal), swapRB)
@@ -191,7 +215,7 @@ if __name__ == "__main__":
 
         cols = result.shape[1]
         rows = result.shape[0]
-
+        people_counter = 0
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
             if confidence > thr:
@@ -200,6 +224,9 @@ if __name__ == "__main__":
                 yLeftBottom = int(detections[0, 0, i, 4] * rows)
                 xRightTop = int(detections[0, 0, i, 5] * cols)
                 yRightTop = int(detections[0, 0, i, 6] * rows)
+                if class_id == 15:
+                    people_counter +=1
+                
 
                 cv.rectangle(result, (xLeftBottom, yLeftBottom), (xRightTop, yRightTop),
                              (0, 255, 0))
@@ -241,14 +268,24 @@ if __name__ == "__main__":
                     cv.putText(depth_map, label_conf, (value_x - int(labelSize[0] * 0.5), yLeftBottom + 2 * labelSize[1]
                                                        + baseLine),
                                cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
-
+        print ("People Count: ",people_counter)
         # Show image with object detection
-        cv.namedWindow(WINDOW_NAME, cv.WINDOW_NORMAL)
+        cv.namedWindow(WINDOW_NAME, cv.WINDOW_AUTOSIZE)
         cv.imshow(WINDOW_NAME, result)
 
         # Show Depth map
-        cv.namedWindow(WINDOW_NAME_DEPTH, cv.WINDOW_NORMAL)
+        # cv.putText(depth_map, fps_view, (7, 70), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 3, cv.LINE_AA)
+        cv.namedWindow(WINDOW_NAME_DEPTH, cv.WINDOW_AUTOSIZE)
         cv.imshow(WINDOW_NAME_DEPTH, depth_map)
 
         if cv.waitKey(1) >= 0:
             break
+        # if len(save) == 500:
+        #     break
+    
+
+    # with open ("sample_tof_dnn_fps.txt","w") as file :
+    #     file.write(str(save))
+    
+    
+
